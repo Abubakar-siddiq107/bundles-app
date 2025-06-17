@@ -1,59 +1,48 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
+import express from "express";
+import axios from "axios";
+import cors from "cors";
+import dotenv from "dotenv";
 
+dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.static("public"));
 app.use(express.json());
 
-// Access environment variables from Render dashboard
-const SHOPIFY_API_TOKEN = process.env.SHOPIFY_API_TOKEN;
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+const { SHOPIFY_API_TOKEN, SHOPIFY_STORE } = process.env;
 
 app.post("/create-draft", async (req, res) => {
   const { items } = req.body;
-  if (!items || !Array.isArray(items)) return res.status(400).send("Invalid items");
+  if (!items || items.length < 2) return res.status(400).send("Invalid items");
+
+  const grouped = {};
+  items.forEach(item => {
+    const key = item.variant_id;
+    grouped[key] = grouped[key] || { ...item, quantity: 0 };
+    grouped[key].quantity += 1;
+  });
+
+  const line_items = [];
+  let count = 0;
+  for (const key in grouped) {
+    const group = grouped[key];
+    for (let i = 0; i < group.quantity; i++) {
+      const discounted = count < Math.floor(items.length / 2) * 2;
+      line_items.push({
+        variant_id: group.variant_id,
+        quantity: 1,
+        price: discounted ? (2999 / 2).toFixed(2) : undefined,
+        title: group.title
+      });
+      count++;
+    }
+  }
 
   try {
-    // Flatten all jacket units
-    const allJackets = [];
-    items.forEach(item => {
-      for (let i = 0; i < item.quantity; i++) {
-        allJackets.push({
-          variant_id: item.variant_id,
-          title: item.title
-        });
-      }
-    });
-
-    const bundlePairs = Math.floor(allJackets.length / 2);
-    const leftover = allJackets.length % 2;
-
-    const line_items = [];
-
-    // Add bundled jackets at ₹1499.5 each
-    for (let i = 0; i < bundlePairs * 2; i++) {
-      line_items.push({
-        title: allJackets[i].title,
-        price: "1499.5",
-        quantity: 1,
-        taxable: true
-      });
-    }
-
-    // Add leftover jackets at original price using variant_id
-    for (let i = bundlePairs * 2; i < allJackets.length; i++) {
-      line_items.push({
-        variant_id: allJackets[i].variant_id,
-        quantity: 1,
-        taxable: true
-      });
-    }
-
     const draftOrder = {
       draft_order: {
-        line_items
+        line_items,
+        use_customer_default_address: true
       }
     };
 
@@ -70,13 +59,12 @@ app.post("/create-draft", async (req, res) => {
 
     const invoiceUrl = response.data.draft_order.invoice_url;
     res.json({ url: invoiceUrl });
-
   } catch (err) {
-    console.error("Error creating draft order:", err.response?.data || err.message);
-    res.status(500).send("Error creating draft order");
+    console.error("Error:", err.response?.data || err.message);
+    res.status(500).send("Failed to create draft order");
   }
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("Server running...");
+  console.log("Bundle app running on port", process.env.PORT || 3000);
 });

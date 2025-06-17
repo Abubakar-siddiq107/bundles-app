@@ -5,7 +5,13 @@ const cors = require("cors");
 
 dotenv.config();
 const app = express();
-app.use(cors());
+
+app.use(cors({
+  origin: "https://knkas.myshopify.com",  // ✅ Only allow your Shopify store
+  methods: ["POST", "GET"],
+  credentials: true
+}));
+
 app.use(express.static("public"));
 app.use(express.json());
 

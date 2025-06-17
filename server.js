@@ -1,10 +1,11 @@
 const express = require("express");
 const axios = require("axios");
 const dotenv = require("dotenv");
-const path = require("path");
+const cors = require("cors");
 
 dotenv.config();
 const app = express();
+app.use(cors());
 app.use(express.static("public"));
 app.use(express.json());
 
@@ -19,9 +20,9 @@ app.post("/create-draft", async (req, res) => {
       draft_order: {
         line_items: items.map(item => ({
           title: item.title,
+          price: (2999 / 2).toFixed(2),
           quantity: item.quantity,
-          variant_id: item.variant_id,
-          price: (2999 / 2).toFixed(2) // Half price per jacket
+          taxable: true
         }))
       }
     };

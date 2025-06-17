@@ -10,7 +10,7 @@
       title: j.title
     }));
 
-    const response = await fetch("https://<YOUR_RENDER_URL>/create-draft", {
+    const response = await fetch("https://bundles-app.onrender.com/create-draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items: cleanItems })

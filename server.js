@@ -7,58 +7,55 @@ app.use(cors());
 app.use(express.static("public"));
 app.use(express.json());
 
-// Render environment variables
-const { SHOPIFY_API_TOKEN, SHOPIFY_STORE } = process.env;
+// Access environment variables from Render dashboard
+const SHOPIFY_API_TOKEN = process.env.SHOPIFY_API_TOKEN;
+const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 
 app.post("/create-draft", async (req, res) => {
   const { items } = req.body;
   if (!items || !Array.isArray(items)) return res.status(400).send("Invalid items");
 
   try {
-    // Filter jacket items only
-    const jackets = items.filter(item => item.product_type?.toLowerCase() === "jacket");
+    // Flatten all jacket units
+    const allJackets = [];
+    items.forEach(item => {
+      for (let i = 0; i < item.quantity; i++) {
+        allJackets.push({
+          variant_id: item.variant_id,
+          title: item.title
+        });
+      }
+    });
 
-    // Separate bundle jackets and extra jackets
-    const bundledPairs = Math.floor(jackets.length / 2);
-    const extraJackets = jackets.length % 2;
+    const bundlePairs = Math.floor(allJackets.length / 2);
+    const leftover = allJackets.length % 2;
 
-    // Line items for draft order
     const line_items = [];
 
-    // Add bundled jackets (₹1499 each)
-    let jacketsAdded = 0;
-    for (let i = 0; i < items.length && jacketsAdded < bundledPairs * 2; i++) {
-      const item = items[i];
-      if (item.product_type?.toLowerCase() === "jacket") {
-        line_items.push({
-          variant_id: item.variant_id,
-          quantity: item.quantity,
-          title: item.title,
-          price: (2999 / 2).toFixed(2),
-          taxable: true,
-        });
-        jacketsAdded++;
-      }
+    // Add bundled jackets at ₹1499.5 each
+    for (let i = 0; i < bundlePairs * 2; i++) {
+      line_items.push({
+        title: allJackets[i].title,
+        price: "1499.5",
+        quantity: 1,
+        taxable: true
+      });
     }
 
-    // Add remaining jackets and non-jacket products at original price
-    for (let item of items) {
-      const isJacket = item.product_type?.toLowerCase() === "jacket";
-      const alreadyAdded = line_items.find(li => li.variant_id === item.variant_id);
-      const eligibleForBundle = isJacket && jacketsAdded-- > 0;
-
-      if (!eligibleForBundle && !alreadyAdded) {
-        line_items.push({
-          variant_id: item.variant_id,
-          quantity: item.quantity,
-          title: item.title,
-          // price is omitted to use default Shopify price
-          taxable: true,
-        });
-      }
+    // Add leftover jackets at original price using variant_id
+    for (let i = bundlePairs * 2; i < allJackets.length; i++) {
+      line_items.push({
+        variant_id: allJackets[i].variant_id,
+        quantity: 1,
+        taxable: true
+      });
     }
 
-    const draftOrder = { draft_order: { line_items } };
+    const draftOrder = {
+      draft_order: {
+        line_items
+      }
+    };
 
     const response = await axios.post(
       `https://${SHOPIFY_STORE}/admin/api/2023-10/draft_orders.json`,

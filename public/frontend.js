@@ -1,32 +1,22 @@
 (async function () {
-  const response = await fetch("/cart.js");
-  const cart = await response.json();
-  const jackets = cart.items.filter(item =>
-    item.product_type.toLowerCase() === "jacket"
-  );
+  const res = await fetch("/cart.js");
+  const cart = await res.json();
+  const jackets = cart.items.filter(i => i.product_type.toLowerCase() === "jacket");
 
   if (jackets.length === 2) {
-    const total = jackets.reduce((sum, j) => sum + j.final_line_price, 0);
-    const bundleTotal = 299900;
-    const discount = Math.round((total - bundleTotal) / 2);
+    const cleanItems = jackets.map(j => ({
+      variant_id: j.variant_id,
+      quantity: j.quantity,
+      title: j.title
+    }));
 
-    for (let jacket of jackets) {
-      await fetch("/cart/change.js", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          id: jacket.key,
-          quantity: jacket.quantity,
-          properties: {
-            _bundle: "Jacket Bundle Applied",
-            _adjusted_price: `₹${((jacket.final_line_price - discount) / 100).toFixed(2)}`
-          }
-        })
-      });
-    }
+    const response = await fetch("https://<YOUR_RENDER_URL>/create-draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: cleanItems })
+    });
 
-    location.reload();
+    const data = await response.json();
+    if (data?.url) window.location.href = data.url;
   }
 })();

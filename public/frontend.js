@@ -2,22 +2,18 @@ async function sendCartToBundleApp() {
   const cart = await fetch('/cart.js').then(res => res.json());
   const jackets = cart.items.filter(item => item.product_type?.toLowerCase() === "jacket");
 
-  const cleanItems = [];
-  jackets.forEach(j => {
-    for (let i = 0; i < j.quantity; i++) {
-      cleanItems.push({
-        variant_id: j.variant_id,
-        title: j.title,
-        quantity: 1
-      });
-    }
-  });
-
-  if (cleanItems.length >= 2) {
+  if (jackets.length >= 2) {
     const response = await fetch("https://bundles-app.onrender.com/create-draft", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: cleanItems })
+      body: JSON.stringify({
+        items: jackets.map(j => ({
+          variant_id: j.variant_id,
+          quantity: j.quantity,
+          title: j.title,
+          product_type: j.product_type
+        }))
+      })
     });
 
     const data = await response.json();
@@ -29,8 +25,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (window.location.pathname === "/cart") {
     const cart = await fetch('/cart.js').then(res => res.json());
     const jackets = cart.items.filter(item => item.product_type?.toLowerCase() === "jacket");
-    const defaultCheckout = document.querySelector("form[action='/cart'] [type='submit']");
 
+    const defaultCheckout = document.querySelector("form[action='/cart'] [type='submit']");
     if (defaultCheckout) {
       defaultCheckout.style.display = "none";
 
@@ -45,7 +41,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       defaultCheckout.parentNode.appendChild(bundleBtn);
     }
 
-    // Price visual update
     const jacketUnitPrice = 1499.5;
     let totalJackets = jackets.reduce((sum, j) => sum + j.quantity, 0);
     const bundleCount = Math.floor(totalJackets / 2);
@@ -56,26 +51,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     let bundleApplied = 0;
 
     jackets.forEach((jacket) => {
-      for (let i = 0; i < jacket.quantity; i++) {
-        const itemRow = Array.from(cartItems).find(row => {
-          const title = row.querySelector(".cart__product-title a");
-          return title && title.innerText.trim() === jacket.product_title.trim();
-        });
+      const matchingRow = Array.from(cartItems).find(row => {
+        const titleEl = row.querySelector(".cart__product-title a");
+        const idEl = row.querySelector("input[name^='updates']");
+        return (
+          titleEl &&
+          idEl &&
+          titleEl.innerText.trim() === jacket.title.trim() &&
+          idEl.name.includes(jacket.variant_id)
+        );
+      });
 
-        if (itemRow) {
-          const priceEl = itemRow.querySelector(".cart__price");
-          if (priceEl) {
-            const originalPriceText = priceEl.innerText.trim();
-            const originalPrice = parseFloat(originalPriceText.replace(/[₹,]/g, ''));
+      if (matchingRow) {
+        const priceEl = matchingRow.querySelector(".cart__price");
+        const qty = jacket.quantity;
+        const originalPriceEl = priceEl?.innerText.trim() || "";
+        const originalPriceNum = parseFloat(originalPriceEl.replace(/[₹,]/g, ""));
 
-            if (bundleApplied < bundleCount * 2) {
-              priceEl.innerHTML = `<span style='text-decoration:line-through;color:gray;font-size:0.9em;'>₹${originalPrice.toLocaleString("en-IN")}.00</span><br><strong>₹${jacketUnitPrice.toLocaleString("en-IN")}</strong>`;
-              updatedSubtotal += jacketUnitPrice;
-              bundleApplied++;
-            } else {
-              priceEl.innerHTML = `<strong>₹${originalPrice.toLocaleString("en-IN")}.00</strong>`;
-              updatedSubtotal += originalPrice;
-            }
+        for (let i = 0; i < qty; i++) {
+          if (bundleApplied < bundleCount * 2) {
+            updatedSubtotal += jacketUnitPrice;
+            bundleApplied++;
+          } else {
+            updatedSubtotal += originalPriceNum;
+          }
+        }
+
+        if (priceEl) {
+          if (bundleApplied >= qty) {
+            priceEl.innerHTML = `<span style='text-decoration:line-through;color:gray;font-size:0.9em;'>₹${originalPriceNum.toLocaleString("en-IN")}</span><br><strong>₹${jacketUnitPrice.toLocaleString("en-IN")}</strong>`;
+          } else if (bundleApplied === 0) {
+            priceEl.innerHTML = `<strong>₹${originalPriceNum.toLocaleString("en-IN")}</strong>`;
+          } else {
+            const bundleQty = bundleCount * 2 - (bundleApplied - qty);
+            const bundlePart = `₹${jacketUnitPrice.toLocaleString("en-IN")} x ${bundleQty}`;
+            const regularPart = `₹${originalPriceNum.toLocaleString("en-IN")} x ${qty - bundleQty}`;
+            priceEl.innerHTML = `<span style='text-decoration:line-through;color:gray;font-size:0.9em;'>₹${originalPriceNum.toLocaleString("en-IN")}</span><br><strong>${bundlePart} + ${regularPart}</strong>`;
           }
         }
       }
@@ -83,14 +94,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const subtotalEl = document.querySelector(".cart__subtotal .h3");
     if (subtotalEl) {
-      const oldText = subtotalEl.innerText.trim();
-      subtotalEl.innerHTML = `<span style='text-decoration:line-through;color:gray;font-size:0.9em;'>${oldText}</span><br><strong>₹${updatedSubtotal.toLocaleString("en-IN")}.00</strong>`;
+      const oldSubtotal = subtotalEl.innerText.trim();
+      subtotalEl.innerHTML = `<span style='text-decoration:line-through;color:gray;font-size:0.9em;'>${oldSubtotal}</span><br><strong>₹${updatedSubtotal.toLocaleString("en-IN")}.00</strong>`;
     }
 
     const cartForm = document.querySelector("form[action='/cart']");
     const offerNote = document.createElement("p");
-    const noteText = `Offer Applied: ${bundleCount * 2} Jackets at ₹${(bundleCount * 2999).toLocaleString("en-IN")} ` +
-      (leftoverCount > 0 ? `+ ${leftoverCount} Jacket(s) at regular price` : ``);
+    const noteText = `Offer Applied: ${bundleCount * 2} Jacket(s) at ₹${(bundleCount * 2999).toLocaleString("en-IN")}` +
+      (leftoverCount > 0 ? ` + ${leftoverCount} Jacket(s) at regular price` : ``);
     offerNote.innerHTML = `<em style='color:green;font-weight:600;'>${noteText}</em>`;
     offerNote.style.marginTop = "10px";
     cartForm.appendChild(offerNote);

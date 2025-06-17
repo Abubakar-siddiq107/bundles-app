@@ -1,7 +1,10 @@
 (async function () {
   const res = await fetch("/cart.js");
   const cart = await res.json();
-  const jackets = cart.items.filter(i => i.product_type.toLowerCase() === "jacket");
+
+  const jackets = cart.items.filter(item =>
+    item.product_type?.toLowerCase() === "jacket"
+  );
 
   if (jackets.length === 2) {
     const cleanItems = jackets.map(j => ({

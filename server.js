@@ -1,51 +1,50 @@
-require('dotenv').config();
-const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
+const express = require("express");
+const axios = require("axios");
+const dotenv = require("dotenv");
+const path = require("path");
+
+dotenv.config();
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(express.static("public"));
+app.use(express.json());
 
-app.use(bodyParser.json());
+const { SHOPIFY_API_TOKEN, SHOPIFY_STORE } = process.env;
 
-// Webhook or frontend trigger endpoint
-app.post('/create-bundle-order', async (req, res) => {
+app.post("/create-draft", async (req, res) => {
+  const { items } = req.body;
+  if (!items || items.length !== 2) return res.status(400).send("Invalid items");
+
   try {
-    const cart = req.body.cart; // Expects [{product_id, title, quantity, price}, ...]
-    const jackets = cart.filter(item => item.title.toLowerCase().includes("jacket"));
-    
-    if (jackets.length >= 2) {
-      const line_items = jackets.slice(0, 2).map(item => ({
-        title: item.title,
-        quantity: 1,
-        price: 1499.5  // ₹2999 split evenly
-      }));
+    const draftOrder = {
+      draft_order: {
+        line_items: items.map(item => ({
+          title: item.title,
+          quantity: item.quantity,
+          variant_id: item.variant_id,
+          price: (2999 / 2).toFixed(2) // Half price per jacket
+        }))
+      }
+    };
 
-      const response = await axios.post(
-        `https://${process.env.SHOPIFY_STORE}/admin/api/2023-07/draft_orders.json`,
-        {
-          draft_order: {
-            line_items,
-            note: "Auto Bundle: 2 Jackets for ₹2999",
-            use_customer_default_address: true
-          }
-        },
-        {
-          headers: {
-            "X-Shopify-Access-Token": process.env.SHOPIFY_API_TOKEN,
-            "Content-Type": "application/json"
-          }
+    const response = await axios.post(
+      `https://${SHOPIFY_STORE}/admin/api/2023-10/draft_orders.json`,
+      draftOrder,
+      {
+        headers: {
+          "X-Shopify-Access-Token": SHOPIFY_API_TOKEN,
+          "Content-Type": "application/json"
         }
-      );
+      }
+    );
 
-      const draftOrder = response.data.draft_order;
-      return res.json({ checkout_url: draftOrder.invoice_url });
-    }
-
-    return res.status(400).json({ error: "Cart does not contain 2 jackets" });
-  } catch (error) {
-    console.error("Error creating bundle order:", error.message);
-    res.status(500).send("Internal Server Error");
+    const invoiceUrl = response.data.draft_order.invoice_url;
+    res.json({ url: invoiceUrl });
+  } catch (err) {
+    console.error("Error creating draft order:", err.response?.data || err.message);
+    res.status(500).send("Error creating draft order");
   }
 });
 
-app.listen(port, () => console.log(`Bundles App running on ${port}`));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Server running...");
+});

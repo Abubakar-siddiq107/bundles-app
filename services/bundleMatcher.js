@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 
 const bundles = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'bundles.json'), 'utf8')
+  fs.readFileSync(path.join(__dirname, '..', 'bundles', 'bundles.json'), 'utf8')
 );
+
 
 // Helper to group items by product_type
 function groupByProductType(cartItems) {

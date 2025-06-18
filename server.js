@@ -5,7 +5,7 @@ const app = express();
 const dotenv = require('dotenv');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const applyBundleLogic = require('./applyBundle');
+const applyBundleLogic = require('./routes/applyBundle');
 const { createDraftOrder } = require('./shopify');
 
 dotenv.config();

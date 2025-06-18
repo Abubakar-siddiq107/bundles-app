@@ -5,10 +5,9 @@ const shopify = require('../utils/shopify');
 const fs = require('fs');
 const path = require('path');
 
-
 async function applyBundleLogic(cartItems) {
   // Step 1: Run the bundle matcher logic
-  const line_items = matchBundles(cartItems);
+  const line_items = bundleMatcher(cartItems); // ✅ Corrected
 
   // Step 2: Assemble final draft order object
   const draftOrder = {

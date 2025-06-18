@@ -1,27 +1,52 @@
 // server.js
 
 const express = require('express');
-const cors = require('cors');
+const app = express();
 const dotenv = require('dotenv');
-const applyBundleRoute = require('./routes/applyBundle');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const applyBundleLogic = require('./applyBundle');
+const { createDraftOrder } = require('./shopify');
 
 dotenv.config();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-// Routes
-app.use('/apply-bundle', applyBundleRoute);
+// Route: Apply bundle and return draft order checkout URL
+app.post('/apply-bundle', async (req, res) => {
+  try {
+    const { cartItems } = req.body;
 
-app.get('/', (req, res) => {
-  res.send('🔥 Kezual Bundles App is Running');
+    if (!cartItems || !Array.isArray(cartItems)) {
+      return res.status(400).json({ error: 'Invalid cart items format' });
+    }
+
+    // Run bundle matcher to get final order items + total
+    const draftOrder = await applyBundleLogic(cartItems);
+
+    // Create draft order on Shopify
+    const response = await createDraftOrder(draftOrder);
+
+    // Return the checkout URL
+    const checkoutUrl = response?.data?.draft_order?.invoice_url;
+    if (!checkoutUrl) throw new Error('Draft order creation failed');
+
+    return res.status(200).json({ checkoutUrl });
+
+  } catch (err) {
+    console.error('Error in /apply-bundle:', err);
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-// Start server
+// Health check route
+app.get('/', (req, res) => {
+  res.send('Bundle App is Running ✅');
+});
+
+// Start the server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });

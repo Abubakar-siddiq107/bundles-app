@@ -1,35 +1,24 @@
-// routes/applyBundle.js
+// applyBundle.js
 
-const express = require('express');
-const router = express.Router();
+const matchBundles = require('./bundleMatcher');
 
-const matchBundles = require('../services/bundleMatcher');
-const { createDraftOrder } = require('../utils/shopify');
+async function applyBundleLogic(cartItems) {
+  // Step 1: Run the bundle matcher logic
+  const line_items = matchBundles(cartItems);
 
-// POST /apply-bundle
-router.post('/', async (req, res) => {
-  try {
-    const cartItems = req.body.cart;
-    if (!Array.isArray(cartItems) || cartItems.length === 0) {
-      return res.status(400).json({ error: 'Invalid cart data' });
-    }
+  // Step 2: Assemble final draft order object
+  const draftOrder = {
+    line_items: line_items.map(item => ({
+      title: item.title,
+      quantity: item.quantity,
+      price: item.price.toString()
+    })),
+    currency: 'INR',
+    use_customer_default_address: true,
+    tags: ['Created by Kezual Bundle App']
+  };
 
-    // Match bundle(s) and calculate pricing
-    const matchedResult = matchBundles(cartItems);
+  return draftOrder;
+}
 
-    if (!matchedResult || matchedResult.lineItems.length === 0) {
-      return res.status(200).json({ message: 'No matching bundle', redirectUrl: null });
-    }
-
-    // Create draft order in Shopify
-    const draftOrderUrl = await createDraftOrder(matchedResult.lineItems);
-
-    return res.status(200).json({ redirectUrl: draftOrderUrl });
-  } catch (err) {
-    console.error('Error in /apply-bundle:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-module.exports = router;
-
+module.exports = applyBundleLogic;

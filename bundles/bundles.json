@@ -1,1 +1,26 @@
-
+[
+  {
+    "id": "2-jackets-2999",
+    "title": "Buy 2 Jackets for ₹2999",
+    "type": "fixed_price",
+    "product_ids": ["123456789", "987654321"],  // Replace with your actual jacket product IDs
+    "required_quantity": 2,
+    "bundle_price": 2999
+  },
+  {
+    "id": "3-pants-25off",
+    "title": "Buy 3 Pants, Get 25% Off",
+    "type": "percentage_off",
+    "product_ids": ["555555555", "666666666"],
+    "required_quantity": 3,
+    "discount_percent": 25
+  },
+  {
+    "id": "bogo-tees",
+    "title": "Buy 1 Tee, Get 1 Free",
+    "type": "bogo",
+    "product_ids": ["888888888"],
+    "required_quantity": 2,
+    "charge_quantity": 1
+  }
+]

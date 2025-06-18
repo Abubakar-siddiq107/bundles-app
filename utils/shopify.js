@@ -1,14 +1,19 @@
-// shopify.js
-
 const axios = require('axios');
 require('dotenv').config();
 
-const SHOPIFY_API_VERSION = '2024-01'; // Change if you're using another version
+const SHOPIFY_API_VERSION = '2024-01';
+
+const shop = process.env.SHOPIFY_SHOP;
+const token = process.env.SHOPIFY_ADMIN_TOKEN;
+
+if (!shop || !token) {
+  console.error('❌ Missing SHOPIFY_SHOP or SHOPIFY_ADMIN_TOKEN in environment variables');
+}
 
 const shopify = axios.create({
-  baseURL: `https://${process.env.SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}`,
+  baseURL: `https://${shop}/admin/api/${SHOPIFY_API_VERSION}`,
   headers: {
-    'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_TOKEN,
+    'X-Shopify-Access-Token': token,
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }
@@ -21,8 +26,9 @@ async function createDraftOrder(draftOrder) {
     });
     return response;
   } catch (error) {
-    console.error('❌ Error creating draft order:', error.response?.data || error.message);
-    throw new Error('Failed to create draft order');
+    const details = error.response?.data || error.message;
+    console.error('❌ Error creating draft order:', JSON.stringify(details, null, 2));
+    throw new Error(`Shopify API error: ${details.errors || 'Unknown error'}`);
   }
 }
 

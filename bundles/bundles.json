@@ -1,26 +1,27 @@
+// ✅ bundles.json
 [
   {
+    "bundle_name": "Buy 2 Jackets for ₹2999",
     "product_type": "jacket",
     "min_quantity": 2,
-    "bundle_price": 2999,
-    "bundle_name": "2 Jackets for ₹2999"
+    "bundle_price": 2999
   },
   {
-    "product_type": "pant",
+    "bundle_name": "Buy 2 Pants for ₹1999",
+    "product_type": "pants",
     "min_quantity": 2,
-    "bundle_price": 2599,
-    "bundle_name": "2 Pants for ₹2599"
+    "bundle_price": 1999
   },
   {
+    "bundle_name": "Buy 2 Hoodies for ₹2499",
     "product_type": "hoodie",
     "min_quantity": 2,
-    "bundle_price": 2999,
-    "bundle_name": "2 Hoodies for ₹2999"
+    "bundle_price": 2499
   },
   {
+    "bundle_name": "Any 3 Items for ₹3999",
     "product_type": "any",
     "min_quantity": 3,
-    "bundle_price": 3999,
-    "bundle_name": "Any 3 Items for ₹3999"
+    "bundle_price": 3999
   }
 ]

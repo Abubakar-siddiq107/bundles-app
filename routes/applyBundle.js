@@ -1,6 +1,10 @@
 // applyBundle.js
 
-const matchBundles = require('./bundleMatcher');
+const bundleMatcher = require('../services/bundleMatcher');
+const shopify = require('../utils/shopify');
+const fs = require('fs');
+const path = require('path');
+
 
 async function applyBundleLogic(cartItems) {
   // Step 1: Run the bundle matcher logic

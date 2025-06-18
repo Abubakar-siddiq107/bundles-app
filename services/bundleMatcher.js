@@ -1,125 +1,107 @@
-// services/bundleMatcher.js
+// bundleMatcher.js
 
 const fs = require('fs');
 const path = require('path');
 
-// Load bundle config once at startup
 const bundles = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../bundles/bundles.json'), 'utf-8')
+  fs.readFileSync(path.join(__dirname, 'bundles.json'), 'utf8')
 );
 
-// Match bundles and return draft order line items
-function matchBundles(cart) {
-  const remainingCart = [...cart]; // so we can remove matched items
-  const draftLineItems = [];
+function groupByProductType(cartItems) {
+  const groups = {};
+  for (const item of cartItems) {
+    const type = item.product_type.toLowerCase();
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(item);
+  }
+  return groups;
+}
 
-  for (const bundle of bundles) {
-    // Collect matching items
-    const matchingItems = remainingCart.filter(item =>
-      bundle.product_ids.includes(item.product_id)
+function matchBundles(cartItems) {
+  const line_items = [];
+  let remainingItems = [...cartItems];
+
+  // First apply specific bundles (jacket, pant, hoodie)
+  for (const bundle of bundles.filter(b => b.product_type !== 'any')) {
+    const matchingItems = remainingItems.filter(
+      item => item.product_type.toLowerCase() === bundle.product_type.toLowerCase()
     );
 
-    const totalMatchingQty = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
-    const bundleCount = Math.floor(totalMatchingQty / bundle.required_quantity);
+    const totalQty = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
+    const bundleCount = Math.floor(totalQty / bundle.min_quantity);
+    const leftoverQty = totalQty % bundle.min_quantity;
 
-    if (bundleCount === 0) continue;
-
-    if (bundle.type === 'fixed_price') {
-      // Add bundled line item
-      draftLineItems.push({
-        title: bundle.title,
-        price: (bundle.bundle_price * bundleCount).toFixed(2),
-        quantity: 1
+    if (bundleCount > 0) {
+      line_items.push({
+        title: `${bundle.bundle_name} Bundle`,
+        quantity: bundleCount,
+        price: bundle.bundle_price
       });
-
-      // Reduce matched quantities
-      deductFromCart(remainingCart, bundle.product_ids, bundle.required_quantity * bundleCount);
     }
 
-    if (bundle.type === 'percentage_off') {
-      const discountedQty = bundle.required_quantity * bundleCount;
-      const percentOff = bundle.discount_percent;
+    // Retain only leftovers for the next round
+    const qtyToRemove = bundleCount * bundle.min_quantity;
+    let qtyLeft = qtyToRemove;
+    const newRemaining = [];
 
-      // Find products to discount
-      const toDiscount = getDiscountedItems(remainingCart, bundle.product_ids, discountedQty);
-
-      toDiscount.forEach(item => {
-        draftLineItems.push({
-          variant_id: item.variant_id,
-          quantity: item.quantity,
-          price: (item.price * (1 - percentOff / 100)).toFixed(2)
+    for (const item of matchingItems) {
+      if (qtyLeft >= item.quantity) {
+        qtyLeft -= item.quantity;
+        // fully consumed, skip
+      } else {
+        newRemaining.push({
+          ...item,
+          quantity: item.quantity - qtyLeft
         });
-      });
-
-      // Remove discounted items from cart
-      deductFromCart(remainingCart, bundle.product_ids, discountedQty);
-    }
-
-    if (bundle.type === 'bogo') {
-      const groupCount = bundleCount;
-      const chargeQty = bundle.charge_quantity * groupCount;
-      const totalQty = bundle.required_quantity * groupCount;
-
-      const toCharge = getDiscountedItems(remainingCart, bundle.product_ids, chargeQty);
-
-      toCharge.forEach(item => {
-        draftLineItems.push({
-          variant_id: item.variant_id,
-          quantity: item.quantity,
-          price: item.price.toFixed(2)
-        });
-      });
-
-      // Skip the free ones (we deduct all)
-      deductFromCart(remainingCart, bundle.product_ids, totalQty);
-    }
-  }
-
-  // Add remaining full-price items
-  remainingCart.forEach(item => {
-    draftLineItems.push({
-      variant_id: item.variant_id,
-      quantity: item.quantity,
-      price: item.price.toFixed(2)
-    });
-  });
-
-  return { lineItems: draftLineItems };
-}
-
-// Utility to remove matched quantity from cart
-function deductFromCart(cart, productIds, qtyToRemove) {
-  for (let i = 0; i < cart.length && qtyToRemove > 0; i++) {
-    if (productIds.includes(cart[i].product_id)) {
-      const deductQty = Math.min(cart[i].quantity, qtyToRemove);
-      cart[i].quantity -= deductQty;
-      qtyToRemove -= deductQty;
-
-      if (cart[i].quantity === 0) {
-        cart.splice(i, 1);
-        i--;
+        qtyLeft = 0;
       }
     }
+
+    // Add back items that didn’t match this bundle type
+    remainingItems = remainingItems
+      .filter(i => i.product_type.toLowerCase() !== bundle.product_type.toLowerCase())
+      .concat(newRemaining);
   }
-}
 
-// Utility to find discounted items with variants and price
-function getDiscountedItems(cart, productIds, qtyNeeded) {
-  const result = [];
+  // Now apply "Any 3 Items @ 3999" bundle
+  const totalAnyQty = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
+  const any3Bundle = bundles.find(b => b.product_type === 'any');
+  const anyBundleCount = Math.floor(totalAnyQty / any3Bundle.min_quantity);
+  if (anyBundleCount > 0) {
+    line_items.push({
+      title: `${any3Bundle.bundle_name}`,
+      quantity: anyBundleCount,
+      price: any3Bundle.bundle_price
+    });
+  }
 
-  for (const item of cart) {
-    if (productIds.includes(item.product_id) && qtyNeeded > 0) {
-      const usedQty = Math.min(qtyNeeded, item.quantity);
-      result.push({
-        variant_id: item.variant_id,
-        price: item.price,
-        quantity: usedQty
+  // Reduce remaining items accordingly
+  let remainingQtyToRemove = anyBundleCount * any3Bundle.min_quantity;
+  const finalLeftovers = [];
+
+  for (const item of remainingItems) {
+    if (remainingQtyToRemove >= item.quantity) {
+      remainingQtyToRemove -= item.quantity;
+      // fully consumed
+    } else {
+      finalLeftovers.push({
+        ...item,
+        quantity: item.quantity - remainingQtyToRemove
       });
-      qtyNeeded -= usedQty;
+      remainingQtyToRemove = 0;
     }
   }
 
-  return result;
+  // Add leftover items at full price
+  for (const item of finalLeftovers) {
+    line_items.push({
+      title: item.title,
+      quantity: item.quantity,
+      price: item.price
+    });
+  }
+
+  return line_items;
 }
 
 module.exports = matchBundles;

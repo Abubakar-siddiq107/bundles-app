@@ -50,3 +50,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
+console.log('Shopify Shop:', process.env.SHOPIFY_SHOP);
+console.log('Shopify Token:', process.env.SHOPIFY_ADMIN_TOKEN ? 'Loaded ✅' : 'Missing ❌');

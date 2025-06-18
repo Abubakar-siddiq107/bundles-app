@@ -32,7 +32,7 @@
         const cart = await fetchCart();
         const formattedCart = formatCartItems(cart.items);
 
-        const res = await fetch('https://your-app-name.onrender.com/apply-bundle', {
+        const res = await fetch('https://bundles-app.onrender.com/apply-bundle', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ cart: formattedCart })

@@ -1,59 +1,63 @@
-// public/frontend.js
+// frontend.js
 
-(async function () {
-  // Wait for cart to load
-  async function fetchCart() {
-    const res = await fetch('/cart.js');
-    return await res.json();
+async function getCartData() {
+  const res = await fetch('/cart.js');
+  const cart = await res.json();
+
+  return cart.items.map(item => ({
+    title: item.product_title,
+    product_type: item.product_type,
+    quantity: item.quantity,
+    price: item.final_price / 100  // Convert from cents to ₹
+  }));
+}
+
+async function createBundleDraftOrder(cartItems) {
+  const response = await fetch('https://your-app-name.onrender.com/apply-bundle', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ cartItems })
+  });
+
+  const data = await response.json();
+  if (data.checkoutUrl) {
+    window.location.href = data.checkoutUrl; // Redirect to Shopify Draft Order Checkout
+  } else {
+    alert('Something went wrong applying bundle discount.');
   }
+}
 
-  // Format cart for backend API
-  function formatCartItems(items) {
-    return items.map(item => ({
-      product_id: item.product_id.toString(),
-      variant_id: item.variant_id.toString(),
-      price: item.original_line_price / item.quantity / 100,
-      quantity: item.quantity
-    }));
-  }
+function replaceCheckoutButton() {
+  const originalButton = document.querySelector('form[action="/cart"] [type="submit"], button[name="checkout"]');
+  if (!originalButton) return;
 
-  // Replace default checkout button
-  function overrideCheckoutButton() {
-    const defaultButton = document.querySelector('[name="checkout"], .checkout, .cart__checkout');
-    if (!defaultButton) return;
+  // Hide original button
+  originalButton.style.display = 'none';
 
-    const customButton = defaultButton.cloneNode(true);
-    customButton.innerText = 'Checkout with Bundle Offer';
-    defaultButton.style.display = 'none';
-    defaultButton.parentNode.insertBefore(customButton, defaultButton);
+  // Create custom checkout button
+  const customButton = document.createElement('button');
+  customButton.innerText = 'Checkout with Bundle Offer';
+  customButton.style.cssText = `
+    background-color: black;
+    color: white;
+    padding: 14px 24px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    margin-top: 12px;
+    width: 100%;
+  `;
 
-    customButton.addEventListener('click', async () => {
-      try {
-        const cart = await fetchCart();
-        const formattedCart = formatCartItems(cart.items);
+  originalButton.parentNode.insertBefore(customButton, originalButton.nextSibling);
 
-        const res = await fetch('https://bundles-app.onrender.com/apply-bundle', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cart: formattedCart })
-        });
+  customButton.addEventListener('click', async () => {
+    const cartItems = await getCartData();
+    await createBundleDraftOrder(cartItems);
+  });
+}
 
-        const data = await res.json();
-
-        if (data.redirectUrl) {
-          window.location.href = data.redirectUrl;
-        } else {
-          // No bundle matched — fallback to Shopify default checkout
-          defaultButton.click();
-        }
-      } catch (err) {
-        console.error('Bundle checkout failed:', err);
-        defaultButton.click();
-      }
-    });
-  }
-
-  // Run on DOM ready
-  document.addEventListener('DOMContentLoaded', overrideCheckoutButton);
-})();
-
+// Run this after DOM is loaded
+document.addEventListener('DOMContentLoaded', replaceCheckoutButton);

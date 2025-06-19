@@ -9,7 +9,7 @@ const { createDraftOrder } = require('./utils/shopify');
 
 dotenv.config();
 
-const allowedOrigin = process.env.CLIENT_ORIGIN || 'https://knkas.myshopify.com';
+const allowedOrigin = process.env.SHOPIFY_SHOP || 'https://your-shop.myshopify.com';
 
 app.use(cors({
   origin: allowedOrigin,

@@ -1,4 +1,4 @@
-const bundles = require('../bundles.json');
+const bundles = require('../bundles/bundles.json');
 
 function matchBundles(cartItems) {
   const matchedItems = [];

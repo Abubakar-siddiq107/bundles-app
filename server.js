@@ -21,7 +21,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-const applyBundleLogic = require('../services/applyBundle');
+const applyBundleLogic = require('../routes/applyBundle');
 
 app.post('/apply-bundle', async (req, res) => {
   try {

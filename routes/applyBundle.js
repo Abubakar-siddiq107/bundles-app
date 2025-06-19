@@ -1,4 +1,3 @@
-
 const matchBundles = require('../services/bundleMatcher');
 
 async function applyBundleLogic(cartItems) {
@@ -6,10 +5,9 @@ async function applyBundleLogic(cartItems) {
 
   const draftOrder = {
     line_items: line_items.map(item => ({
-      title: item.title,
+      title: `${item.title} (Size: ${item.variant_title})`,
       quantity: item.quantity,
-      price: item.price.toFixed(2),
-      variant_id: item.variant_id
+      price: item.price.toFixed(2)
     })),
     currency: 'INR',
     use_customer_default_address: true,

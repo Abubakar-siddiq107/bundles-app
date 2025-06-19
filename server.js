@@ -1,4 +1,3 @@
-// ✅ server.js
 const express = require('express');
 const app = express();
 const dotenv = require('dotenv');
@@ -9,6 +8,7 @@ const { createDraftOrder } = require('./utils/shopify');
 
 dotenv.config();
 
+// ✅ CORS Setup
 const allowedOrigin = process.env.SHOPIFY_SHOP
   ? `https://${process.env.SHOPIFY_SHOP}`
   : 'https://your-shop.myshopify.com';
@@ -21,8 +21,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-const applyBundleLogic = require('../routes/applyBundle');
-
+// ✅ Bundle Route
 app.post('/apply-bundle', async (req, res) => {
   try {
     const { cartItems } = req.body;
@@ -31,9 +30,7 @@ app.post('/apply-bundle', async (req, res) => {
       return res.status(400).json({ error: 'Invalid cart items format' });
     }
 
-    // 🧠 Update: get both order + metadata
     const { draftOrder, bundleName, bundleTotal } = await applyBundleLogic(cartItems);
-
     const response = await createDraftOrder(draftOrder);
     const checkoutUrl = response?.data?.draft_order?.invoice_url;
 
@@ -51,11 +48,12 @@ app.post('/apply-bundle', async (req, res) => {
   }
 });
 
-
+// ✅ Health Check
 app.get('/', (req, res) => {
   res.send('✅ Bundle App is Running');
 });
 
+// ✅ Start Server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

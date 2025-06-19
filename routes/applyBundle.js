@@ -1,10 +1,10 @@
 const matchBundles = require('../services/bundleMatcher');
 
 async function applyBundleLogic(cartItems) {
-  const line_items = matchBundles(cartItems);
+  const matchResult = matchBundles(cartItems);
 
   const draftOrder = {
-    line_items: line_items.map(item => ({
+    line_items: matchResult.line_items.map(item => ({
       title: `${item.title} (Size: ${item.variant_title})`,
       quantity: item.quantity,
       price: item.price.toFixed(2)
@@ -15,7 +15,11 @@ async function applyBundleLogic(cartItems) {
     tags: 'Kezual-Bundle'
   };
 
-  return draftOrder;
+  return {
+    draftOrder,
+    bundleName: matchResult.bundleName,    // e.g. "2 Jackets for ₹2999"
+    bundleTotal: matchResult.bundleTotal   // e.g. 2999
+  };
 }
 
 module.exports = applyBundleLogic;

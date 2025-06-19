@@ -4,115 +4,88 @@ const fs = require('fs');
 const path = require('path');
 
 const bundles = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '..', 'bundles', 'bundles.json'), 'utf8')
+  fs.readFileSync(path.join(__dirname, '../data/bundles.json'), 'utf8')
 );
 
-
-// Helper to group items by product_type
-function groupByProductType(cartItems) {
-  const groups = {};
-  for (const item of cartItems) {
-    const type = item.product_type.toLowerCase();
-    if (!groups[type]) groups[type] = [];
-    groups[type].push(item);
+function expandItems(items) {
+  const expanded = [];
+  for (const item of items) {
+    for (let i = 0; i < item.quantity; i++) {
+      expanded.push({ ...item, quantity: 1 });
+    }
   }
-  return groups;
+  return expanded;
+}
+
+function groupItems(items, type) {
+  return items.filter(item => item.product_type.toLowerCase() === type.toLowerCase());
+}
+
+function removeMatchedItems(items, matched) {
+  const result = [...items];
+  for (const m of matched) {
+    const index = result.findIndex(i => i.variant_id === m.variant_id);
+    if (index !== -1) result.splice(index, 1);
+  }
+  return result;
+}
+
+function matchBundleType(items, bundle) {
+  const matchedGroups = [];
+  const pool = groupItems(items, bundle.product_type);
+  while (pool.length >= bundle.min_quantity) {
+    matchedGroups.push(pool.splice(0, bundle.min_quantity));
+  }
+  return matchedGroups;
+}
+
+function matchAnyBundle(items, bundle) {
+  const matchedGroups = [];
+  const pool = [...items];
+  while (pool.length >= bundle.min_quantity) {
+    matchedGroups.push(pool.splice(0, bundle.min_quantity));
+  }
+  return matchedGroups;
 }
 
 function matchBundles(cartItems) {
+  let expanded = expandItems(cartItems);
   const line_items = [];
-  let remainingItems = [...cartItems];
 
-  // First apply specific bundles (jacket, pant, hoodie)
   for (const bundle of bundles.filter(b => b.product_type !== 'any')) {
-    const matchingItems = remainingItems.filter(
-      item => item.product_type.toLowerCase() === bundle.product_type.toLowerCase()
-    );
-
-    const totalQty = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
-    const bundleCount = Math.floor(totalQty / bundle.min_quantity);
-    const leftoverQty = totalQty % bundle.min_quantity;
-
-    if (bundleCount > 0) {
+    const matches = matchBundleType(expanded, bundle);
+    for (const group of matches) {
       line_items.push({
-        title: `${bundle.bundle_name} Bundle`,
-        quantity: bundleCount,
-        price: bundle.bundle_price
+        title: `${bundle.bundle_name} - ${group.map(i => i.title).join(', ')}`,
+        quantity: 1,
+        price: bundle.bundle_price,
+        variant_ids: group.map(i => i.variant_id)
       });
     }
-
-    // Remove used items from remainingItems
-    const qtyToRemove = bundleCount * bundle.min_quantity;
-    let qtyLeft = qtyToRemove;
-    const newRemaining = [];
-
-    for (const item of matchingItems) {
-      if (qtyLeft >= item.quantity) {
-        qtyLeft -= item.quantity;
-        // fully consumed, skip
-      } else {
-        newRemaining.push({
-          ...item,
-          quantity: item.quantity - qtyLeft
-        });
-        qtyLeft = 0;
-      }
-    }
-
-    // Add back unmatched items and leftover
-    remainingItems = remainingItems
-      .filter(i => i.product_type.toLowerCase() !== bundle.product_type.toLowerCase())
-      .concat(newRemaining);
+    expanded = removeMatchedItems(expanded, matches.flat());
   }
 
-  // Now apply "Any 3 Items @ 3999" bundle
-  const any3Bundle = bundles.find(b => b.product_type === 'any');
-  if (any3Bundle) {
-    const totalAnyQty = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
-    const anyBundleCount = Math.floor(totalAnyQty / any3Bundle.min_quantity);
-
-    if (anyBundleCount > 0) {
+  const anyBundle = bundles.find(b => b.product_type === 'any');
+  if (anyBundle) {
+    const matches = matchAnyBundle(expanded, anyBundle);
+    for (const group of matches) {
       line_items.push({
-        title: `${any3Bundle.bundle_name}`,
-        quantity: anyBundleCount,
-        price: any3Bundle.bundle_price
+        title: `${anyBundle.bundle_name} - ${group.map(i => i.title).join(', ')}`,
+        quantity: 1,
+        price: anyBundle.bundle_price,
+        variant_ids: group.map(i => i.variant_id)
       });
     }
+    expanded = removeMatchedItems(expanded, matches.flat());
+  }
 
-    // Reduce items used in "any" bundle
-    let qtyToRemove = anyBundleCount * any3Bundle.min_quantity;
-    const leftovers = [];
-
-    for (const item of remainingItems) {
-      if (qtyToRemove >= item.quantity) {
-        qtyToRemove -= item.quantity;
-        // fully consumed
-      } else {
-        leftovers.push({
-          ...item,
-          quantity: item.quantity - qtyToRemove
-        });
-        qtyToRemove = 0;
-      }
-    }
-
-    // Add leftover items at full price
-    for (const item of leftovers) {
-      line_items.push({
-        title: item.title,
-        quantity: item.quantity,
-        price: item.price
-      });
-    }
-  } else {
-    // No "any" bundle, add all remaining items as-is
-    for (const item of remainingItems) {
-      line_items.push({
-        title: item.title,
-        quantity: item.quantity,
-        price: item.price
-      });
-    }
+  for (const item of expanded) {
+    line_items.push({
+      title: item.title,
+      quantity: 1,
+      price: item.price,
+      variant_ids: [item.variant_id]
+    });
   }
 
   return line_items;

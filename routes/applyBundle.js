@@ -14,7 +14,7 @@ async function applyBundleLogic(cartItems) {
     currency: 'INR',
     use_customer_default_address: true,
     note: 'Created via Kezual Bundles App',
-    tags: ['Kezual-Bundle']
+    tags: 'Kezual-Bundle'
   };
 
   return draftOrder;

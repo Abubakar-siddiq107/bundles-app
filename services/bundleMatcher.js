@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load bundle definitions
-const bundlesPath = path.join(__dirname, '.../bundles/bundles.json');
+const bundlesPath = path.join(__dirname, '../bundles/bundles.json');
 const bundleDefinitions = JSON.parse(fs.readFileSync(bundlesPath, 'utf-8'));
 
 function matchBundles(cartItems) {

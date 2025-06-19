@@ -1,7 +1,7 @@
 const matchBundles = require('../services/bundleMatcher');
 
 async function applyBundleLogic(cartItems) {
-  const { line_items, bundleName, bundleTotal } = matchBundles(cartItems);
+  const line_items = matchBundles(cartItems);
 
   const draftOrder = {
     line_items: line_items.map(item => ({
@@ -15,11 +15,7 @@ async function applyBundleLogic(cartItems) {
     tags: 'Kezual-Bundle'
   };
 
-  return {
-    draftOrder,
-    bundleName,
-    bundleTotal
-  };
+  return draftOrder;
 }
 
 module.exports = applyBundleLogic;

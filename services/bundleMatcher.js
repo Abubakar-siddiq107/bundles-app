@@ -1,112 +1,97 @@
-// bundleMatcher.js
-
 const fs = require('fs');
 const path = require('path');
 
-const bundles = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../bundles/bundles.json'), 'utf8')
-);
-
-function cloneItem(item, qty, overridePrice = null) {
-  return {
-    title: `${item.title} (${item.variant_title})`,
-    quantity: qty,
-    price: overridePrice !== null ? overridePrice : item.price,
-    variant_id: item.variant_id
-  };
-}
+// Load bundle definitions
+const bundlesPath = path.join(__dirname, 'bundles/bundles.json');
+const bundleDefinitions = JSON.parse(fs.readFileSync(bundlesPath, 'utf-8'));
 
 function matchBundles(cartItems) {
-  let remainingItems = [...cartItems];
-  const line_items = [];
+  const outputItems = [];
 
-  // Step 1: Match product-type-specific bundles
-  for (const bundle of bundles.filter(b => b.product_type !== 'any')) {
-    const matchingItems = remainingItems.filter(
-      item => item.product_type.toLowerCase() === bundle.product_type.toLowerCase()
-    );
+  const itemsByType = {};
 
-    const totalQty = matchingItems.reduce((sum, i) => sum + i.quantity, 0);
-    const bundleCount = Math.floor(totalQty / bundle.min_quantity);
-    const itemsNeeded = bundleCount * bundle.min_quantity;
+  // Step 1: Group cart items by product_type
+  for (const item of cartItems) {
+    const type = item.product_type.toLowerCase();
 
-    if (bundleCount > 0) {
-      let qtyToBundle = itemsNeeded;
-      const matched = [];
-
-      for (const item of matchingItems) {
-        if (qtyToBundle === 0) break;
-        const qtyUsed = Math.min(item.quantity, qtyToBundle);
-        matched.push({ ...item, quantity: qtyUsed });
-        qtyToBundle -= qtyUsed;
-      }
-
-      const splitPrice = parseFloat((bundle.bundle_price / itemsNeeded).toFixed(2));
-      matched.forEach(m => {
-        line_items.push(cloneItem(m, m.quantity, splitPrice));
+    if (!itemsByType[type]) itemsByType[type] = [];
+    for (let i = 0; i < item.quantity; i++) {
+      itemsByType[type].push({
+        title: item.title,
+        price: item.price,
+        variant_id: item.variant_id
       });
-
-      // Remove used quantities from remainingItems
-      for (const used of matched) {
-        const index = remainingItems.findIndex(i =>
-          i.title === used.title &&
-          i.variant_id === used.variant_id
-        );
-        if (index !== -1) {
-          if (remainingItems[index].quantity === used.quantity) {
-            remainingItems.splice(index, 1);
-          } else {
-            remainingItems[index].quantity -= used.quantity;
-          }
-        }
-      }
     }
   }
 
-  // Step 2: Apply "Any 3 Items" bundle
-  const anyBundle = bundles.find(b => b.product_type === 'any');
-  const totalQty = remainingItems.reduce((sum, i) => sum + i.quantity, 0);
-  const bundleCount = Math.floor(totalQty / anyBundle.min_quantity);
-  const itemsNeeded = bundleCount * anyBundle.min_quantity;
+  // Step 2: Apply product-type-specific bundles
+  for (const bundle of bundleDefinitions.filter(b => b.product_type !== 'any')) {
+    const type = bundle.product_type.toLowerCase();
+    const eligibleItems = itemsByType[type] || [];
 
-  if (bundleCount > 0) {
-    let qtyToBundle = itemsNeeded;
-    const matched = [];
+    const bundleCount = Math.floor(eligibleItems.length / bundle.min_quantity);
 
+    for (let i = 0; i < bundleCount; i++) {
+      const itemsInBundle = eligibleItems.splice(0, bundle.min_quantity);
+      const perItemPrice = +(bundle.bundle_price / bundle.min_quantity).toFixed(2);
+
+      for (const item of itemsInBundle) {
+        outputItems.push({
+          title: item.title,
+          variant_id: item.variant_id,
+          quantity: 1,
+          price: perItemPrice
+        });
+      }
+    }
+
+    // Remaining (non-bundled) items at full price
+    for (const item of eligibleItems) {
+      outputItems.push({
+        title: item.title,
+        variant_id: item.variant_id,
+        quantity: 1,
+        price: item.price
+      });
+    }
+
+    // Mark processed
+    delete itemsByType[type];
+  }
+
+  // Step 3: Apply 'any' bundle across remaining items
+  const remainingItems = Object.values(itemsByType).flat();
+
+  const anyBundle = bundleDefinitions.find(b => b.product_type === 'any');
+  if (anyBundle) {
+    const bundleCount = Math.floor(remainingItems.length / anyBundle.min_quantity);
+
+    for (let i = 0; i < bundleCount; i++) {
+      const itemsInBundle = remainingItems.splice(0, anyBundle.min_quantity);
+      const perItemPrice = +(anyBundle.bundle_price / anyBundle.min_quantity).toFixed(2);
+
+      for (const item of itemsInBundle) {
+        outputItems.push({
+          title: item.title,
+          variant_id: item.variant_id,
+          quantity: 1,
+          price: perItemPrice
+        });
+      }
+    }
+
+    // Add leftovers
     for (const item of remainingItems) {
-      if (qtyToBundle === 0) break;
-      const qtyUsed = Math.min(item.quantity, qtyToBundle);
-      matched.push({ ...item, quantity: qtyUsed });
-      qtyToBundle -= qtyUsed;
-    }
-
-    const splitPrice = parseFloat((anyBundle.bundle_price / itemsNeeded).toFixed(2));
-    matched.forEach(m => {
-      line_items.push(cloneItem(m, m.quantity, splitPrice));
-    });
-
-    // Remove used quantities
-    for (const used of matched) {
-      const index = remainingItems.findIndex(i =>
-        i.title === used.title &&
-        i.variant_id === used.variant_id
-      );
-      if (index !== -1) {
-        if (remainingItems[index].quantity === used.quantity) {
-          remainingItems.splice(index, 1);
-        } else {
-          remainingItems[index].quantity -= used.quantity;
-        }
-      }
+      outputItems.push({
+        title: item.title,
+        variant_id: item.variant_id,
+        quantity: 1,
+        price: item.price
+      });
     }
   }
 
-  // Step 3: Add leftover items at full price
-  for (const item of remainingItems) {
-    line_items.push(cloneItem(item, item.quantity));
-  }
-
-  return line_items;
+  return outputItems;
 }
 
 module.exports = matchBundles;
